@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-x-superset-image: &superset-image apache/superset:latest-dev
+x-superset-image: &superset-image apache/superset:1.4.0rc4
 x-superset-depends-on: &superset-depends-on
   - db
   - redis
@@ -26,7 +26,7 @@ x-superset-volumes: &superset-volumes
 version: "3.7"
 services:
   redis:
-    image: redis:latest
+    image: redis:6.2
     container_name: superset_cache
     restart: unless-stopped
     volumes:
@@ -34,7 +34,7 @@ services:
 
   db:
     env_file: docker/.env-non-dev
-    image: postgres:10
+    image: postgres:14.1
     container_name: superset_db
     restart: unless-stopped
     volumes:
@@ -47,10 +47,18 @@ services:
     command: ["/app/docker/docker-bootstrap.sh", "app-gunicorn"]
     user: "root"
     restart: unless-stopped
-    ports:
-      - 8088:8088
+    networks:
+      - default
+      - web
+    expose:
+      - 8088
     depends_on: *superset-depends-on
     volumes: *superset-volumes
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.superset.entryPoints: web
+      traefik.http.routers.superset.tls.certResolver: default
+      traefik.http.routers.superset.rule: Host(`superset.example.com`)
 
   superset-init:
     image: *superset-image
@@ -83,8 +91,21 @@ services:
 
 volumes:
   superset_home:
-    external: false
+    driver_opts:
+      type: none
+      device: ${VOLUMES_ROOT}/data
+      o: bind
   db_home:
-    external: false
+    driver_opts:
+      type: none
+      device: ${VOLUMES_ROOT}/postgres
+      o: bind
   redis:
-    external: false
+    driver_opts:
+      type: none
+      device: ${VOLUMES_ROOT}/redis
+      o: bind
+
+networks:
+  web:
+    external: true
